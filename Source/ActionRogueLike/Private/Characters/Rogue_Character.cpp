@@ -6,7 +6,10 @@
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Camera/CameraComponent.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
+#include "Kismet/KismetMathLibrary.h"
+#include "Projectiles/Rogue_MagicProjectile.h"
 
 
 // Sets default values
@@ -17,9 +20,16 @@ ARogue_Character::ARogue_Character()
 
 	SpringArmComponent = CreateDefaultSubobject<USpringArmComponent>("SpringArm");
 	SpringArmComponent->SetupAttachment(GetRootComponent());
+	SpringArmComponent->bUsePawnControlRotation = true;
 
 	CameraComp = CreateDefaultSubobject<UCameraComponent>("Camera");
 	CameraComp->SetupAttachment(SpringArmComponent);
+
+	InteractionComponent = CreateDefaultSubobject<URogue_InteractionComponent>("InteractionComponent");
+
+	bUseControllerRotationYaw = false;
+
+	GetCharacterMovement()->bOrientRotationToMovement = true;
 }
 
 // Called when the game starts or when spawned
@@ -42,8 +52,58 @@ void ARogue_Character::Move(const FInputActionValue& Value)
 {
 	//input is a Vector2D
 	FVector2D InputValue = Value.Get<FVector2D>();
-	AddMovementInput(GetActorForwardVector(), InputValue.X);
-	AddMovementInput(GetActorRightVector(), InputValue.Y);
+
+	FRotator ControlRotatorForward = GetControlRotation();
+	ControlRotatorForward.Pitch = 0.f;
+	ControlRotatorForward.Roll = 0.f;
+	AddMovementInput(ControlRotatorForward.Vector(), InputValue.X);
+
+	FRotator ControlRotatorRight = GetControlRotation();
+	ControlRotatorForward.Pitch = 0.f;
+	ControlRotatorForward.Roll = 0.f;
+	AddMovementInput(UKismetMathLibrary::GetRightVector(ControlRotatorRight), InputValue.Y);
+}
+
+void ARogue_Character::Look(const FInputActionValue& Value)
+{
+	const FVector2D LookAxisVector = Value.Get<FVector2D>();
+
+	AddControllerPitchInput(LookAxisVector.Y);
+	AddControllerYawInput(LookAxisVector.X);
+}
+
+void ARogue_Character::JumpUp(const FInputActionValue& Value)
+{
+	Jump();
+}
+
+void ARogue_Character::PrimaryAttack(const FInputActionValue& Value)
+{
+	PlayAnimMontage(AttackMontage);
+
+	FTimerHandle TimerHandle_PrimaryAttack;
+
+	GetWorldTimerManager().SetTimer(TimerHandle_PrimaryAttack, this, &ThisClass::PrimaryAttack_TimeElapsed, .2f);
+	
+}
+
+void ARogue_Character::Interact(const FInputActionValue& Value)
+{
+	InteractionComponent->PrimaryInteract();
+}
+
+void ARogue_Character::PrimaryAttack_TimeElapsed()
+{
+	if (UWorld* World = GetWorld())
+	{
+		FVector HandLocation = GetMesh()->GetSocketLocation("PrimaryAttackSpawnSocket");
+		
+		FTransform SpawnTransform = FTransform(GetControlRotation(), HandLocation);
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+		
+		World->SpawnActor<AActor>(PrimaryAttackProjectileClass, SpawnTransform, SpawnParams);
+	}
 }
 
 // Called every frame
@@ -62,6 +122,14 @@ void ARogue_Character::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 	{
 		//Moving
 		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ThisClass::Move);
+		//Looking
+		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &ARogue_Character::Look);
+		//Primary Attack
+		EnhancedInputComponent->BindAction(PrimaryAttackAction, ETriggerEvent::Triggered, this, &ARogue_Character::PrimaryAttack);
+		//Jump
+		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Triggered, this, &ARogue_Character::JumpUp);
+		//Interact
+		EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Triggered, this, &ARogue_Character::Interact);
 	}
 }
 
