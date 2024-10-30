@@ -6,10 +6,12 @@
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Camera/CameraComponent.h"
+#include "EntitySystem/MovieSceneEntitySystemRunner.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Projectiles/Rogue_MagicProjectile.h"
+#include "Projectiles/Rogue_TeleportingProjectile.h"
 
 
 // Sets default values
@@ -87,23 +89,88 @@ void ARogue_Character::PrimaryAttack(const FInputActionValue& Value)
 	
 }
 
+void ARogue_Character::SecondaryAttack(const FInputActionValue& Value)
+{
+	PlayAnimMontage(AttackMontage);
+
+	FTimerHandle TimerHandle_SecondaryAttack;
+
+	GetWorldTimerManager().SetTimer(TimerHandle_SecondaryAttack, this, &ThisClass::SecondaryAttack_TimeElapsed, .2f);
+}
+
 void ARogue_Character::Interact(const FInputActionValue& Value)
 {
 	InteractionComponent->PrimaryInteract();
 }
 
+void ARogue_Character::Teleport(const FInputActionValue& Value)
+{
+	PlayAnimMontage(AttackMontage);
+
+	FTimerHandle TimerHandle_Teleport;
+
+	GetWorldTimerManager().SetTimer(TimerHandle_Teleport, this, &ThisClass::TeleportProjectile_TimeElapsed, .2f);
+}
+
+FRotator ARogue_Character::GetProjectileRotation(FVector SpawnLocation)
+{
+	FRotator SpawnRotation;
+	FHitResult LineTraceHit;
+	
+	FVector Start = CameraComp->GetComponentLocation();
+	FVector End =  CameraComp->GetComponentLocation() + (CameraComp->GetComponentRotation().Vector() * 3000);
+
+	FCollisionObjectQueryParams ObjectQueryParams;
+	ObjectQueryParams.AddObjectTypesToQuery(ECC_WorldDynamic);
+	ObjectQueryParams.AddObjectTypesToQuery(ECC_Pawn);
+	ObjectQueryParams.AddObjectTypesToQuery(ECC_WorldStatic);
+	ObjectQueryParams.AddObjectTypesToQuery(ECC_PhysicsBody);
+	
+	GetWorld()->LineTraceSingleByObjectType(LineTraceHit, Start, End, ObjectQueryParams);
+	if(bDebugCameraLineTrace)
+	{
+		DrawDebugLine(GetWorld(), Start, End, FColor::Red, false, 2.f, 0, 2.f);
+	}
+
+	if (LineTraceHit.bBlockingHit)
+	{
+		 SpawnRotation = UKismetMathLibrary::FindLookAtRotation(SpawnLocation, LineTraceHit.ImpactPoint);
+	}
+	else
+	{
+		SpawnRotation = UKismetMathLibrary::FindLookAtRotation(SpawnLocation, End);
+	}
+
+	return SpawnRotation;
+}
+
 void ARogue_Character::PrimaryAttack_TimeElapsed()
+{
+	FireProjectile(PrimaryAttackProjectileClass);
+}
+
+void ARogue_Character::SecondaryAttack_TimeElapsed()
+{
+	FireProjectile(SecondaryAttackProjectileClass);
+}
+
+void ARogue_Character::TeleportProjectile_TimeElapsed()
+{
+	FireProjectile(TeleportingProjectileClass);
+}
+
+void ARogue_Character::FireProjectile(const TSubclassOf<ARogue_MagicProjectile>& ProjectileClass)
 {
 	if (UWorld* World = GetWorld())
 	{
-		FVector HandLocation = GetMesh()->GetSocketLocation("PrimaryAttackSpawnSocket");
-		
-		FTransform SpawnTransform = FTransform(GetControlRotation(), HandLocation);
+		const FVector HandLocation = GetMesh()->GetSocketLocation("PrimaryAttackSpawnSocket");
+
+		const FTransform SpawnTransform = FTransform(GetProjectileRotation(HandLocation), HandLocation);
 		FActorSpawnParameters SpawnParams;
 		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 		SpawnParams.Instigator = this;
 		
-		World->SpawnActor<AActor>(PrimaryAttackProjectileClass, SpawnTransform, SpawnParams);
+		World->SpawnActor<AActor>(ProjectileClass, SpawnTransform, SpawnParams);
 	}
 }
 
@@ -127,10 +194,15 @@ void ARogue_Character::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &ARogue_Character::Look);
 		//Primary Attack
 		EnhancedInputComponent->BindAction(PrimaryAttackAction, ETriggerEvent::Triggered, this, &ARogue_Character::PrimaryAttack);
+		//Secondary Attack
+		EnhancedInputComponent->BindAction(SecondaryAttackAction, ETriggerEvent::Triggered, this, &ThisClass::SecondaryAttack);
 		//Jump
 		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Triggered, this, &ARogue_Character::JumpUp);
 		//Interact
 		EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Triggered, this, &ARogue_Character::Interact);
+		//Teleport
+		EnhancedInputComponent->BindAction(TeleportAction, ETriggerEvent::Triggered, this, &ARogue_Character::Teleport);
+
 	}
 }
 

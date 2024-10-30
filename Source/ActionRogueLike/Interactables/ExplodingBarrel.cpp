@@ -28,6 +28,15 @@ void AExplodingBarrel::OnActorHit(UPrimitiveComponent* HitComponent, AActor* Oth
 	FVector NormalImpulse, const FHitResult& Hit)
 {
 	RadialForce->FireImpulse();
+
+	if (bDebugRadialImpacts)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("OtherActor: %s"), *GetNameSafe(OtherActor));
+
+		FString CombinedString = FString::Printf(TEXT("%s hit at location: %s"), *GetNameSafe(OtherActor), *Hit.ImpactPoint.ToString());
+		DrawDebugString(GetWorld(), Hit.ImpactPoint, CombinedString, nullptr, FColor::Green, 2.0f, true);
+	}
+	
 }
 
 void AExplodingBarrel::PostInitializeComponents()

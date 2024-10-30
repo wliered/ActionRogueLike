@@ -35,7 +35,10 @@ public:
 	UInputAction* JumpAction;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* InteractAction;
-	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
+	UInputAction* SecondaryAttackAction;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
+	UInputAction* TeleportAction;
 	
 protected:
 	// Called when the game starts or when spawned
@@ -47,18 +50,33 @@ protected:
 	USpringArmComponent* SpringArmComponent;
 	UPROPERTY(EditAnywhere, Category = Combat)
 	TSubclassOf<ARogue_MagicProjectile> PrimaryAttackProjectileClass;
+	UPROPERTY(EditAnywhere, Category = Combat)
+	TSubclassOf<ARogue_MagicProjectile> SecondaryAttackProjectileClass;
+	UPROPERTY(EditAnywhere, Category = Combat)
+	TSubclassOf<ARogue_MagicProjectile> TeleportingProjectileClass;
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<URogue_InteractionComponent> InteractionComponent;
 	UPROPERTY(EditAnywhere, Category=Combat)
 	TObjectPtr<UAnimMontage> AttackMontage;
 
+	UPROPERTY(EditAnywhere)
+	bool bDebugCameraLineTrace;
+
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
 	void JumpUp(const FInputActionValue& Value);
 	void PrimaryAttack(const FInputActionValue& Value);
+	void SecondaryAttack(const FInputActionValue& Value);
 	void Interact(const FInputActionValue& Value);
+	void Teleport(const FInputActionValue& Value);
+
+	FRotator GetProjectileRotation(FVector SpawnLocation);
 
 	void PrimaryAttack_TimeElapsed();
+	void SecondaryAttack_TimeElapsed();
+	void TeleportProjectile_TimeElapsed();
+	
+	void FireProjectile(const TSubclassOf<ARogue_MagicProjectile>& ProjectileClass);
 
 public:
 	// Called every frame

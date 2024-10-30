@@ -32,6 +32,9 @@ protected:
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<URadialForceComponent> RadialForce;
 
+	UPROPERTY(EditDefaultsOnly)
+	bool bDebugRadialImpacts;
+
 public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
